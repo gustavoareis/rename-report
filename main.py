@@ -20,7 +20,7 @@ import sys
 import unicodedata
 from pathlib import Path
 
-import fitz  # PyMuPDF
+import pymupdf  # PyMuPDF
 import pytesseract
 from PIL import Image, ImageOps
 
@@ -31,7 +31,7 @@ PALAVRAS_MINUSCULAS = {"da", "de", "do", "das", "dos", "e"}
 
 
 def renderizar_pagina(pdf_path: Path, pagina: int = 0, dpi: int = 300) -> Image.Image:
-    with fitz.open(pdf_path) as doc:
+    with pymupdf.open(pdf_path) as doc:
         pix = doc[pagina].get_pixmap(dpi=dpi)
         return Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
 
@@ -45,21 +45,25 @@ def ocr_topo_da_pagina(img: Image.Image) -> str:
 
 
 def extrair_nome(texto: str) -> str | None:
-    m = re.search(r"NOME\s+DO\s+A?GENTE\s*[:;.]?", texto, re.IGNORECASE)
-    if not m:
-        return None
+    # 1. Tenta encontrar o padrão do recibo: "EU, [NOME], AGENTE POPULAR..."
+    match_recibo = re.search(r"EU,\s*(.*?),\s*AGENTE\s+POPULAR", texto, re.IGNORECASE)
+    if match_recibo:
+        nome = match_recibo.group(1).strip()
+        return nome
 
-    trecho = texto[m.end(): m.end() + 250]
-    # "CPF:" está na mesma linha do rótulo, então pode se misturar ao nome
-    trecho = re.sub(r"\bCPF\b\s*[:;]?", " ", trecho, flags=re.IGNORECASE)
+    # 2. Tenta o padrão original do formulário: "NOME DO AGENTE: [NOME]"
+    match_form = re.search(r"NOME\s+DO\s+A?GENTE\s*[:;.]?", texto, re.IGNORECASE)
+    if match_form:
+        trecho = texto[match_form.end(): match_form.end() + 250]
+        trecho = re.sub(r"\bCPF\b\s*[:;]?", " ", trecho, flags=re.IGNORECASE)
 
-    for linha in trecho.splitlines():
-        # corta no CPF numérico, em USPR ou LOTE (campos vizinhos)
-        linha = re.split(r"\d|USPR|LOTE", linha, flags=re.IGNORECASE)[0]
-        linha = re.sub(r"[^A-Za-zÀ-ÿ\s'-]", " ", linha)
-        palavras = linha.split()
-        if len(palavras) >= 2:
-            return " ".join(palavras)
+        for linha in trecho.splitlines():
+            linha = re.split(r"\d|USPR|LOTE", linha, flags=re.IGNORECASE)[0]
+            linha = re.sub(r"[^A-Za-zÀ-ÿ\s'-]", " ", linha)
+            palavras = linha.split()
+            if len(palavras) >= 2:
+                return " ".join(palavras)
+                
     return None
 
 
