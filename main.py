@@ -45,13 +45,17 @@ def ocr_topo_da_pagina(img: Image.Image) -> str:
 
 
 def extrair_nome(texto: str) -> str | None:
-    # 1. Tenta encontrar o padrão do recibo: "EU, [NOME], AGENTE POPULAR..."
+    # 1. Tenta encontrar o padrão original do recibo: "EU, [NOME], AGENTE POPULAR..."
     match_recibo = re.search(r"EU,\s*(.*?),\s*AGENTE\s+POPULAR", texto, re.IGNORECASE)
     if match_recibo:
-        nome = match_recibo.group(1).strip()
-        return nome
+        return match_recibo.group(1).strip()
+        
+    # 2. Tenta encontrar o NOVO padrão de recibo: "EU, [NOME], PORTADOR..."
+    match_portador = re.search(r"EU,\s*(.*?),\s*PORTADOR", texto, re.IGNORECASE)
+    if match_portador:
+        return match_portador.group(1).strip()
 
-    # 2. Tenta o padrão original do formulário: "NOME DO AGENTE: [NOME]"
+    # 3. Tenta o padrão original do formulário: "NOME DO AGENTE: [NOME]"
     match_form = re.search(r"NOME\s+DO\s+A?GENTE\s*[:;.]?", texto, re.IGNORECASE)
     if match_form:
         trecho = texto[match_form.end(): match_form.end() + 250]
